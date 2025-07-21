@@ -3,6 +3,7 @@ import { NavigationContainer } from "@react-navigation/native"
 import { createStackNavigator } from "@react-navigation/stack"
 import { StatusBar } from "react-native"
 import type { RootStackParamList } from "./src/types/navigation"
+import { FileProvider } from './src/components/FileContext'
 
 // Import screens
 import SplashScreen from "./src/screens/SplashScreen"
@@ -15,6 +16,7 @@ import FilePreviewScreen from "./src/screens/FilePreviewScreen"
 import PasswordVaultScreen from "./src/screens/PasswordVaultScreen"
 import AddPasswordScreen from "./src/screens/AddPasswordScreen"
 import SettingsScreen from "./src/screens/SettingScreen"
+
 
 const Stack = createStackNavigator<RootStackParamList>()
 
@@ -34,36 +36,47 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          cardStyle: { backgroundColor: "#FFFFFF" },
-        }}
-      >
-        {!isAuthenticated ? (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
-            <Stack.Screen name="Biometric">
-              {props => (
-                <BiometricScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />
-              )}
-            </Stack.Screen>
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="FileList" component={FileListScreen} />
-            <Stack.Screen name="FilePreview" component={FilePreviewScreen} />
-            <Stack.Screen name="PasswordVault" component={PasswordVaultScreen} />
-            <Stack.Screen name="AddPassword" component={AddPasswordScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <FileProvider>
+      <NavigationContainer>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+            cardStyle: { backgroundColor: "#FFFFFF" },
+          }}
+        >
+          {!isAuthenticated ? (
+            <>
+              <Stack.Screen name="Login">
+                {props => (
+                  <LoginScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />
+                )}
+              </Stack.Screen>
+              <Stack.Screen name="Signup">
+                {props => (
+                  <SignupScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />
+                )}
+              </Stack.Screen>
+              <Stack.Screen name="Biometric">
+                {props => (
+                  <BiometricScreen {...props} onAuthenticated={() => setIsAuthenticated(true)} />
+                )}
+              </Stack.Screen>
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Dashboard" component={DashboardScreen} />
+              <Stack.Screen name="FileList" component={FileListScreen} />
+              <Stack.Screen name="FilePreview" component={FilePreviewScreen} />
+              <Stack.Screen name="PasswordVault" component={PasswordVaultScreen} />
+              <Stack.Screen name="AddPassword" component={AddPasswordScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="Biometric" component={SettingsScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </FileProvider>
   )
 }
 

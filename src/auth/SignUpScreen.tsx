@@ -14,13 +14,23 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../types/navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Signup'>
+type SignUpScreenProps = Props & { onAuthenticated?: () => void }
 
-export default function SignupScreen(props: Props) {
-  const { navigation } = props;
+export default function SignupScreen(props: SignUpScreenProps) {
+  const { navigation, onAuthenticated } = props;
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+
+  const handleSignUp = () => {
+    // TODO: Add Firebase signup logic here
+    if (onAuthenticated) {
+      onAuthenticated();
+    } else {
+      navigation.navigate("Dashboard");
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -81,7 +91,7 @@ export default function SignupScreen(props: Props) {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.signupButton} onPress={() => navigation.navigate("Biometric")}>
+            <TouchableOpacity style={styles.signupButton} onPress={handleSignUp}>
               <Text style={styles.signupButtonText}>Create Account</Text>
             </TouchableOpacity>
           </View>
@@ -121,7 +131,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    marginTop:32
+    marginTop:32 
   },
   header: {
     alignItems: "center",

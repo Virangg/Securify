@@ -5,13 +5,7 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Tex
 import Icon from "react-native-vector-icons/MaterialIcons"
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../types/navigation'
-
-const mockFiles = [
-  { id: 1, name: "Project Proposal.pdf", size: "2.4 MB", modified: "2 hours ago", type: "pdf" },
-  { id: 2, name: "Contract_Final.pdf", size: "1.8 MB", modified: "1 day ago", type: "pdf" },
-  { id: 3, name: "Invoice_March.pdf", size: "856 KB", modified: "3 days ago", type: "pdf" },
-  { id: 4, name: "Report_Q1.pdf", size: "3.2 MB", modified: "1 week ago", type: "pdf" },
-]
+import { useFileContext } from '../components/FileContext'
 
 // Define the stack param list for navigation typing
 type Props = NativeStackScreenProps<RootStackParamList, 'FileList'>
@@ -20,6 +14,8 @@ export default function FileListScreen(props: Props) {
   const { navigation, route } = props;
   const [searchQuery, setSearchQuery] = useState("")
   const { category } = route.params
+  const { files } = useFileContext();
+  const filteredFiles = files.filter(file => file.categoryId === category);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -48,25 +44,25 @@ export default function FileListScreen(props: Props) {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.sortContainer}>
-          <Text style={styles.resultCount}>{mockFiles.length} files</Text>
+          <Text style={styles.resultCount}>{filteredFiles.length} files</Text>
           <TouchableOpacity style={styles.sortButton}>
             <Text style={styles.sortText}>Modified ↓</Text>
           </TouchableOpacity>
         </View>
 
-        {mockFiles.map((file) => (
+        {filteredFiles.map((file, idx) => (
           <TouchableOpacity
-            key={file.id}
+            key={file.name + idx}
             style={styles.fileCard}
             onPress={() => navigation.navigate("FilePreview", { file })}
           >
             <View style={styles.fileIcon}>
-              <Icon name="description" size={24} color="#3B82F6" />
+              <Icon name={file.icon} size={24} color={file.color} />
             </View>
             <View style={styles.fileInfo}>
               <Text style={styles.fileName}>{file.name}</Text>
               <Text style={styles.fileDetails}>
-                {file.size} • {file.modified}
+                {file.size ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : ''} {file.modified ? `• ${file.modified}` : ''}
               </Text>
             </View>
             <TouchableOpacity style={styles.moreButton}>

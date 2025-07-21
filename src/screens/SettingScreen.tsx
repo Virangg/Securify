@@ -46,6 +46,15 @@ export default function SettingsScreen(props: Props) {
     }
   };
 
+  const handleBiometricToggle = (value: boolean) => {
+    setBiometricEnabled(value);
+    if (value) {
+      navigation.navigate("Biometric");
+    } else {
+      // Optionally clear biometric settings here
+    }
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -70,7 +79,7 @@ export default function SettingsScreen(props: Props) {
             </View>
             <Switch
               value={biometricEnabled}
-              onValueChange={setBiometricEnabled}
+              onValueChange={handleBiometricToggle}
               trackColor={{ false: "#E5E7EB", true: "#DBEAFE" }}
               thumbColor={biometricEnabled ? "#3B82F6" : "#9CA3AF"}
             />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   View,
   Text,
@@ -10,19 +10,53 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native"
 import Icon from "react-native-vector-icons/MaterialIcons"
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../types/navigation'
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import ReactNativeBiometrics from "react-native-biometrics"
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>
+type LoginScreenProps = Props & { onAuthenticated?: () => void }
 
-export default function LoginScreen(props: Props) {
-  const { navigation } = props;
+export default function LoginScreen(props: LoginScreenProps) {
+  const { navigation, onAuthenticated } = props;
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [biometricEnabled, setBiometricEnabled] = useState(true)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const rnBiometrics = new ReactNativeBiometrics()
+
+  // Check if biometrics are enabled on mount
+  useEffect(() => {
+    AsyncStorage.getItem("biometricEnabled").then((value) => {
+      setBiometricEnabled(value === "true")
+    })
+  }, [])
+
+  // Biometric authentication logic
+  const handleBiometricAuth = async () => {
+    const { available, biometryType } = await rnBiometrics.isSensorAvailable()
+    if (!available) {
+      Alert.alert("Biometric authentication is not available. Please enable it in settings.")
+      return
+    }
+    const result = await rnBiometrics.simplePrompt({
+      promptMessage: `Authenticate with ${biometryType}`,
+    })
+    if (result.success) {
+      // Call onAuthenticated if provided, otherwise fallback to navigation
+      if (onAuthenticated) {
+        onAuthenticated();
+      } else {
+        navigation.navigate("Dashboard");
+      }
+    } else {
+      Alert.alert("Authentication failed.")
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -72,7 +106,7 @@ export default function LoginScreen(props: Props) {
             </TouchableOpacity>
 
             {biometricEnabled && (
-              <TouchableOpacity style={styles.biometricButton}>
+              <TouchableOpacity style={styles.biometricButton} onPress={handleBiometricAuth}>
                 <Icon name="fingerprint" size={24} color="#3B82F6" />
                 <Text style={styles.biometricText}>Use Face ID</Text>
               </TouchableOpacity>

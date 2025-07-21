@@ -1,15 +1,114 @@
-import { useState } from "react"
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Switch } from "react-native"
+import { useState, useEffect } from "react"
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  Switch,
+  Alert,
+  Linking, 
+  Platform
+} from "react-native"
 import Icon from "react-native-vector-icons/MaterialIcons"
-import type { NativeStackScreenProps } from '@react-navigation/native-stack'
-import type { RootStackParamList } from '../types/navigation'
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import ReactNativeBiometrics from "react-native-biometrics"
+import type { NativeStackScreenProps } from "@react-navigation/native-stack"
+import type { RootStackParamList } from "../types/navigation"
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Biometric'>
+type Props = NativeStackScreenProps<RootStackParamList, "Biometric">
 type BiometricScreenProps = Props & { onAuthenticated: () => void }
 
+const rnBiometrics = new ReactNativeBiometrics()
+
 export default function BiometricScreen(props: BiometricScreenProps) {
-  const { navigation, onAuthenticated } = props;
+  const { onAuthenticated } = props
   const [biometricEnabled, setBiometricEnabled] = useState(false)
+
+  useEffect(() => {
+    AsyncStorage.getItem("biometricEnabled").then((value) => {
+      if (value === "true") {
+        setBiometricEnabled(true)
+        authenticateBiometric()
+      }
+    })
+  }, [])
+
+  const handleToggle = async (value: boolean) => {
+    const { available, biometryType } = await rnBiometrics.isSensorAvailable()
+
+    if (!available) {
+      Alert.alert(
+        "Biometrics Not Setup",
+        "Your device has not enrolled biometrics. Please enable it in settings.",
+        [
+          {
+            text: "Open Settings",
+            onPress: () => openBiometricSettings,
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      )
+      return
+    }
+
+    if (value) {
+      const result = await rnBiometrics.simplePrompt({
+        promptMessage: `Enable ${biometryType} to unlock your vault`,
+      })
+
+      if (result.success) {
+        await AsyncStorage.setItem("biometricEnabled", "true")
+        setBiometricEnabled(true)
+        Alert.alert("Enabled", "Biometric login is enabled!")
+      } else {
+        setBiometricEnabled(false)
+        Alert.alert("Cancelled", "Biometric setup cancelled.")
+      }
+    } else {
+      await AsyncStorage.removeItem("biometricEnabled")
+      setBiometricEnabled(false)
+      Alert.alert("Disabled", "Biometric login has been disabled.")
+    }
+  }
+
+  const openBiometricSettings = () => {
+    if (Platform.OS === 'android') {
+      Linking.openSettings() // opens app settings
+    } else {
+      Linking.openURL('App-Prefs:') // may work on iOS 15 or earlier
+    }
+  }
+  
+
+  const authenticateBiometric = async () => {
+    const { available, biometryType } = await rnBiometrics.isSensorAvailable()
+
+    if (!available) {
+      Alert.alert(
+        "Biometrics Not Setup",
+        "Biometric authentication is not available. Please enable it in settings.",
+        [
+          {
+            text: "Open Settings",
+            onPress: () => openBiometricSettings
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      )
+      return
+    }
+
+    const result = await rnBiometrics.simplePrompt({
+      promptMessage: `Authenticate with ${biometryType}`,
+    })
+
+    if (result.success) {
+      onAuthenticated()
+    } else {
+      Alert.alert("Failed", "Authentication failed.")
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -19,33 +118,35 @@ export default function BiometricScreen(props: BiometricScreenProps) {
             <Icon name="fingerprint" size={60} color="#3B82F6" />
           </View>
           <Text style={styles.title}>Enable Biometric Security</Text>
-          <Text style={styles.subtitle}>Use Face ID or Touch ID for quick and secure access to your vault</Text>
+          <Text style={styles.subtitle}>
+            Use Face ID or Touch ID for quick and secure access to your vault
+          </Text>
         </View>
 
         <View style={styles.benefits}>
-          <View style={styles.benefitItem}>
-            <Icon name="security" size={20} color="#10B981" />
-            <Text style={styles.benefitText}>Enhanced security for your data</Text>
-          </View>
-          <View style={styles.benefitItem}>
-            <Icon name="security" size={20} color="#10B981" />
-            <Text style={styles.benefitText}>Quick access without typing passwords</Text>
-          </View>
-          <View style={styles.benefitItem}>
-            <Icon name="security" size={20} color="#10B981" />
-            <Text style={styles.benefitText}>Your biometric data stays on device</Text>
-          </View>
+          {[
+            "Enhanced security for your data",
+            "Quick access without typing passwords",
+            "Your biometric data stays on device",
+          ].map((text, index) => (
+            <View style={styles.benefitItem} key={index}>
+              <Icon name="security" size={20} color="#10B981" />
+              <Text style={styles.benefitText}>{text}</Text>
+            </View>
+          ))}
         </View>
 
         <View style={styles.toggleContainer}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleInfo}>
               <Text style={styles.toggleTitle}>Enable Biometric Login</Text>
-              <Text style={styles.toggleSubtitle}>Use Face ID to unlock your vault</Text>
+              <Text style={styles.toggleSubtitle}>
+                Use fingerprint or face ID to unlock
+              </Text>
             </View>
             <Switch
               value={biometricEnabled}
-              onValueChange={setBiometricEnabled}
+              onValueChange={handleToggle}
               trackColor={{ false: "#E5E7EB", true: "#DBEAFE" }}
               thumbColor={biometricEnabled ? "#3B82F6" : "#9CA3AF"}
             />
@@ -54,13 +155,25 @@ export default function BiometricScreen(props: BiometricScreenProps) {
 
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.continueButton, biometricEnabled && styles.continueButtonActive]}
-            onPress={onAuthenticated}
+            style={[
+              styles.continueButton,
+              biometricEnabled && styles.continueButtonActive,
+            ]}
+            onPress={biometricEnabled ? authenticateBiometric : onAuthenticated}
           >
-            <Text style={[styles.continueButtonText, biometricEnabled && styles.continueButtonTextActive]}>
-              Continue
+            <Text
+              style={[
+                styles.continueButtonText,
+                biometricEnabled && styles.continueButtonTextActive,
+              ]}
+            >
+              {biometricEnabled ? "Use Biometrics" : "Continue"}
             </Text>
-            <Icon name="arrow-forward" size={20} color={biometricEnabled ? "#FFFFFF" : "#6B7280"} />
+            <Icon
+              name="arrow-forward"
+              size={20}
+              color={biometricEnabled ? "#FFFFFF" : "#6B7280"}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.skipButton} onPress={onAuthenticated}>
@@ -73,19 +186,9 @@ export default function BiometricScreen(props: BiometricScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: "center",
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 48,
-  },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  content: { flex: 1, paddingHorizontal: 24, justifyContent: "center" },
+  header: { alignItems: "center", marginBottom: 48 },
   iconContainer: {
     width: 120,
     height: 120,
@@ -108,9 +211,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 24,
   },
-  benefits: {
-    marginBottom: 40,
-  },
+  benefits: { marginBottom: 40 },
   benefitItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -148,9 +249,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
   },
-  footer: {
-    alignItems: "center",
-  },
+  footer: { alignItems: "center" },
   continueButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -176,12 +275,8 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginRight: 8,
   },
-  continueButtonTextActive: {
-    color: "#FFFFFF",
-  },
-  skipButton: {
-    padding: 12,
-  },
+  continueButtonTextActive: { color: "#FFFFFF" },
+  skipButton: { padding: 12 },
   skipButtonText: {
     fontSize: 14,
     color: "#6B7280",

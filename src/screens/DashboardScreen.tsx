@@ -1,8 +1,10 @@
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Modal} from "react-native"
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Modal, PermissionsAndroid, Platform, Linking } from "react-native"
 import Icon from "react-native-vector-icons/MaterialIcons"
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../types/navigation'
 import { useState } from "react"
+import { pick, types } from '@react-native-documents/picker'
+import { useFileContext } from '../components/FileContext'
 
 const categories = [
   { id: "documents", title: "Documents", icon: "description", count: 12, color: "#3B82F6" },
@@ -11,20 +13,111 @@ const categories = [
   { id: "text", title: "Text Files", icon: "text-snippet", count: 8, color: "#8B5CF6" },
   { id: "passwords", title: "Password Vault", icon: "lock", count: 15, color: "#EF4444" },
 ]
-const [modalvisible, SetModalVisible ] = useState(false)
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>
 
 export default function DashboardScreen(props: Props) {
   const { navigation } = props;
 
-  const handleAdd = () =>{
-    SetModalVisible(true)
-  }
+  const [modalvisible, SetModalVisible ] = useState(false);
+  const [categories, setCategories] = useState([
+    { id: "documents", title: "Documents", icon: "description", count: 0, color: "#3B82F6" },
+    { id: "spreadsheets", title: "Spreadsheets", icon: "table-chart", count: 0, color: "#10B981" },
+    { id: "images", title: "Images", icon: "image", count: 0, color: "#F59E0B" },
+    { id: "text", title: "Text Files", icon: "text-snippet", count: 0, color: "#8B5CF6" },
+    { id: "passwords", title: "Password Vault", icon: "lock", count: 0, color: "#EF4444" },
+    { id: "others", title: "Others", icon: "lock", count: 0, color: "#EF4444" },
+  ]);
+  const { addFile, files } = useFileContext();
 
-  const handleClose = () =>{
-    SetModalVisible(false)
-  }
+  const handleClose = () => {
+    SetModalVisible(false);
+  };
+
+  const categorizeFile = (fileName: string): string => {
+    const extension = fileName?.split('.').pop()?.toLowerCase();
+    if (!extension) return 'others';
+    const documentExt = ['pdf', 'doc', 'docx', 'ppt', 'pptx'];
+    const spreadsheetExt = ['xls', 'xlsx', 'csv'];
+    const imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    const textExt = ['txt', 'md', 'json'];
+    if (documentExt.includes(extension)) return 'documents';
+    if (spreadsheetExt.includes(extension)) return 'spreadsheets';
+    if (imageExt.includes(extension)) return 'images';
+    if (textExt.includes(extension)) return 'text';
+    return 'others';
+  };
+
+  const getCategoryIconAndColor = (categoryId: string) => {
+    const cat = categories.find(c => c.id === categoryId);
+    return cat ? { icon: cat.icon, color: cat.color } : { icon: 'insert-drive-file', color: '#6B7280' };
+  };
+
+  const requestStoragePermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        console.log('Requesting storage permissions...');
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        ];
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+        console.log('Permission results:', granted);
+        return Object.values(granted).some(val => val === PermissionsAndroid.RESULTS.GRANTED);
+      } catch (err) {
+        console.log('Permission error:', err);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleAdd = async () => {
+    console.log('FAB pressed')
+    const hasPermission = await requestStoragePermission();
+    if (!hasPermission) {
+      console.log('Storage permission denied');
+      return;
+    }
+    try {
+      const filesPicked = await pick({
+        allowMultiSelection: true,
+        type: [types.allFiles],
+      });
+      if (filesPicked && filesPicked.length > 0) {
+        filesPicked.forEach(file => {
+          if (!file.name) return;
+          const fileName = file.name as string;
+          const categoryId = categorizeFile(fileName);
+          setCategories(prev => prev.map(cat =>
+            cat.id === categoryId ? { ...cat, count: cat.count + 1 } : cat
+          ));
+          const { icon, color } = getCategoryIconAndColor(categoryId);
+          addFile({
+            name: fileName,
+            date: 'Just now',
+            icon,
+            color,
+            categoryId,
+            uri: file.uri ?? undefined,
+            size: file.size ?? undefined,
+            type: file.type ?? undefined,
+          });
+        });
+      } else {
+        console.log('No file selected');
+      }
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error as any).code === 'DOCUMENT_PICKER_CANCELED') {
+        console.log('User cancelled picker');
+      } else {
+        console.error('Error picking document:', error);
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -66,36 +159,21 @@ export default function DashboardScreen(props: Props) {
 
         <View style={styles.recentSection}>
           <Text style={styles.sectionTitle}>Recent Files</Text>
-
-          <View style={styles.recentFile}>
-            <View style={styles.fileIcon}>
-              <Icon name="description" size={20} color="#3B82F6" />
-            </View>
-            <View style={styles.fileInfo}>
-              <Text style={styles.fileName}>Project Proposal.pdf</Text>
-              <Text style={styles.fileDate}>Modified 2 hours ago</Text>
-            </View>
-          </View>
-
-          <View style={styles.recentFile}>
-            <View style={styles.fileIcon}>
-              <Icon name="table-chart" size={20} color="#10B981" />
-            </View>
-            <View style={styles.fileInfo}>
-              <Text style={styles.fileName}>Budget 2024.xlsx</Text>
-              <Text style={styles.fileDate}>Modified yesterday</Text>
-            </View>
-          </View>
-
-          <View style={styles.recentFile}>
-            <View style={styles.fileIcon}>
-              <Icon name="image" size={20} color="#F59E0B" />
-            </View>
-            <View style={styles.fileInfo}>
-              <Text style={styles.fileName}>ID_Scan.jpg</Text>
-              <Text style={styles.fileDate}>Modified 3 days ago</Text>
-            </View>
-          </View>
+          {files.length === 0 ? (
+            <Text style={{ color: '#9CA3AF', textAlign: 'center', marginVertical: 16 }}>No recent files</Text>
+          ) : (
+            files.map((file, idx) => (
+              <View style={styles.recentFile} key={file.name + idx}>
+                <View style={styles.fileIcon}>
+                  <Icon name={file.icon} size={20} color={file.color} />
+                </View>
+                <View style={styles.fileInfo}>
+                  <Text style={styles.fileName}>{file.name}</Text>
+                  <Text style={styles.fileDate}>{file.date}</Text>
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
 

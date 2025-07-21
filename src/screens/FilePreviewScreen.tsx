@@ -1,13 +1,99 @@
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from "react-native"
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Image, Dimensions, ActivityIndicator } from "react-native"
 import Icon from "react-native-vector-icons/MaterialIcons"
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../types/navigation'
+import { useEffect, useState } from 'react'
+import Pdf from 'react-native-pdf'
+import RNFS from 'react-native-fs'
+import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
+
+const windowWidth = Dimensions.get('window').width
+
+function renderTable(data: string[][]) {
+  return (
+    <ScrollView horizontal style={{ marginVertical: 10 }}>
+      <View>
+        {data.map((row, i) => (
+          <View key={i} style={{ flexDirection: 'row' }}>
+            {row.map((cell, j) => (
+              <View key={j} style={{ borderWidth: 1, borderColor: '#E5E7EB', padding: 6, minWidth: 80 }}>
+                <Text style={{ fontSize: 12 }}>{cell}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  )
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FilePreview'>
 
 export default function FilePreviewScreen(props: Props) {
   const { navigation, route } = props;
   const { file } = route.params
+  const [textContent, setTextContent] = useState<string | null>(null)
+  const [csvData, setCsvData] = useState<string[][] | null>(null)
+  const [excelData, setExcelData] = useState<string[][] | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const loadFile = async () => {
+      if (!file.uri) return;
+      setLoading(true)
+      try {
+        if (file.type && file.type.startsWith('text')) {
+          const content = await RNFS.readFile(file.uri, 'utf8')
+          setTextContent(content)
+        } else if (file.type && (file.type.includes('csv') || file.name.endsWith('.csv'))) {
+          const content = await RNFS.readFile(file.uri, 'utf8')
+          const parsed = Papa.parse(content)
+          setCsvData(parsed.data as string[][])
+        } else if (file.type && (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+          const b64 = await RNFS.readFile(file.uri, 'base64')
+          const wb = XLSX.read(b64, { type: 'base64' })
+          const wsname = wb.SheetNames[0]
+          const ws = wb.Sheets[wsname]
+          const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as string[][]
+          setExcelData(data)
+        }
+      } catch (e) {
+        setTextContent('Error loading file')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadFile()
+  }, [file])
+
+  let previewContent = null
+  if (loading) {
+    previewContent = <ActivityIndicator size="large" color="#3B82F6" style={{ margin: 32 }} />
+  } else if (file.type && file.type.startsWith('image') && file.uri) {
+    previewContent = <Image source={{ uri: file.uri }} style={{ width: 200, height: 200, borderRadius: 12 }} resizeMode="contain" />
+  } else if (file.type && file.type.includes('pdf') && file.uri) {
+    previewContent = (
+      <Pdf
+        source={{ uri: file.uri }}
+        style={{ width: windowWidth - 48, height: 400, borderRadius: 12 }}
+        trustAllCerts={true}
+        renderActivityIndicator={() => <ActivityIndicator size="large" color="#3B82F6" />}
+      />
+    )
+  } else if (file.type && file.type.startsWith('text') && textContent) {
+    previewContent = (
+      <ScrollView style={{ maxHeight: 300, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12 }}>
+        <Text style={{ fontSize: 14 }}>{textContent}</Text>
+      </ScrollView>
+    )
+  } else if ((file.type && file.type.includes('csv')) && csvData) {
+    previewContent = renderTable(csvData)
+  } else if ((file.type && (file.type.includes('spreadsheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) && excelData) {
+    previewContent = renderTable(excelData)
+  } else {
+    previewContent = <Text style={styles.previewText}>No preview available</Text>
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -26,8 +112,7 @@ export default function FilePreviewScreen(props: Props) {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.previewContainer}>
           <View style={styles.documentPreview}>
-            <Text style={styles.previewText}>Document Preview</Text>
-            <Text style={styles.previewSubtext}>PDF content would be rendered here</Text>
+            {previewContent}
           </View>
         </View>
 
@@ -35,15 +120,15 @@ export default function FilePreviewScreen(props: Props) {
           <Text style={styles.detailsTitle}>File Details</Text>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Size:</Text>
-            <Text style={styles.detailValue}>{file.size}</Text>
+            <Text style={styles.detailValue}>{file.size ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : 'Unknown'}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Modified:</Text>
-            <Text style={styles.detailValue}>{file.modified}</Text>
+            <Text style={styles.detailValue}>{file.modified || file.date || 'Unknown'}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Type:</Text>
-            <Text style={styles.detailValue}>PDF Document</Text>
+            <Text style={styles.detailValue}>{file.type || 'Unknown'}</Text>
           </View>
         </View>
       </ScrollView>
